@@ -45,7 +45,7 @@ export const MEDIA_BASE_URL =
  * Global override — forces every type back onto the mock (handy when the API is
  * down). Leave `false`; which types are live is decided by GENERATION_ENDPOINTS.
  */
-export const FORCE_MOCK = false
+export const FORCE_MOCK = true
 
 /* -------------------------------------------------------------------------- */
 /*  2. Endpoints — one entry per content type                                 */
