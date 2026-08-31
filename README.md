@@ -338,8 +338,3 @@ These are known and intentional at this stage:
 - The frontend bundle is ~600 kB; code-splitting the heavier pages would help
 
 ---
-
-## License
-
-Not currently licensed. Add a `LICENSE` file before making the repository public
-if you intend others to use it.
