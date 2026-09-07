@@ -3,10 +3,14 @@ import { Bar } from 'react-chartjs-2'
 import {
   FaDownload, FaArrowTrendUp, FaArrowTrendDown, FaUsers, FaWandMagicSparkles,
   FaRotate, FaCircleCheck, FaTriangleExclamation, FaLightbulb, FaClock,
+  FaFilter,
 } from 'react-icons/fa6'
 import { gridColor, tickColor } from '../chartSetup'
 import DateRangePicker, { addDays, daysBetween, formatRange, startOfDay } from '../components/DateRangePicker'
-import { buildAiSummary, profileStatsForPeriod, profileTotals } from '../analyticsData'
+import {
+  buildAiSummary, profileStatsForPeriod, profileTotals,
+  FUNNEL_PLATFORMS, funnelForPeriod, funnelSummary, exposureForPeriod,
+} from '../analyticsData'
 
 const KPIS = [
   { cls: 'kb', l: 'Total Revenue', v: '$1,244,820', ch: '+14.2% MoM' },
@@ -20,14 +24,6 @@ const CHANNELS = [
   { name: 'Google Ads', color: 'var(--pink)', val: '$338K', ch: '+9.2%', up: true },
   { name: 'TikTok', color: 'var(--amber)', val: '$287K', ch: '−18.0%', up: false },
   { name: 'Email', color: 'var(--green)', val: '$207K', ch: '+42.1%', up: true },
-]
-
-const FUNNEL = [
-  { l: 'Impressions', v: '4.1M', w: 100, bg: 'var(--accent)', color: 'white', note: '' },
-  { l: 'Clicks', v: '298K', w: 72, bg: 'rgba(109,94,245,0.7)', color: 'white', note: '7.3% CTR' },
-  { l: 'Add to Cart', v: '31.2K', w: 44, bg: 'rgba(232,91,170,0.65)', color: 'white', note: '10.5%' },
-  { l: 'Checkout', v: '18.4K', w: 28, bg: 'rgba(232,148,12,0.8)', color: '#3a2600', note: '59.0%' },
-  { l: 'Purchase', v: '12.1K', w: 18, bg: 'var(--green)', color: 'white', note: '65.8%' },
 ]
 
 const revLabels = ['1', '4', '7', '10', '13', '16', '19', '22', '25', '26'].map((x) => x + ' Aug')
@@ -44,19 +40,48 @@ const revOpts = {
   },
 }
 
-const expData = {
-  labels: ['Smart Watch', 'Earbuds Pro', 'Tracker Lite'],
-  datasets: [
-    { label: 'Impressions (M)', data: [2.1, 1.4, 0.6], backgroundColor: 'rgba(109,94,245,0.6)', borderRadius: 4 },
-    { label: 'Clicks (K)', data: [158, 98, 42], backgroundColor: 'rgba(232,91,170,0.6)', borderRadius: 4 },
-  ],
+/** Short axis/tooltip numbers — impressions run into the millions. */
+const axisNum = (n) => {
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000) return (n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1) + 'M'
+  if (abs >= 1_000) return Math.round(n / 1_000) + 'K'
+  return String(Math.round(n))
+}
+
+/**
+ * Impressions and clicks differ by roughly a factor of ten, so they get their
+ * own axes — on a shared scale the clicks bars flatten to nothing.
+ */
+function buildExposureData({ labels, impressions, clicks }) {
+  return {
+    labels,
+    datasets: [
+      { label: 'Impressions', data: impressions, yAxisID: 'y', backgroundColor: 'rgba(109,94,245,0.6)', borderRadius: 4 },
+      { label: 'Clicks', data: clicks, yAxisID: 'y1', backgroundColor: 'rgba(232,91,170,0.6)', borderRadius: 4 },
+    ],
+  }
 }
 const expOpts = {
   responsive: true,
-  plugins: { legend: { display: true, labels: { color: tickColor, font: { size: 11 }, boxWidth: 10 } } },
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: { display: true, labels: { color: tickColor, font: { size: 11 }, boxWidth: 10 } },
+    tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + c.parsed.y.toLocaleString() } },
+  },
   scales: {
     x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } } },
-    y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } } },
+    y: {
+      position: 'left',
+      grid: { color: gridColor },
+      ticks: { color: tickColor, font: { size: 10 }, callback: axisNum },
+      title: { display: true, text: 'Impressions', color: tickColor, font: { size: 10 } },
+    },
+    y1: {
+      position: 'right',
+      grid: { drawOnChartArea: false },
+      ticks: { color: tickColor, font: { size: 10 }, callback: axisNum },
+      title: { display: true, text: 'Clicks', color: tickColor, font: { size: 10 } },
+    },
   },
 }
 
@@ -232,9 +257,20 @@ export default function Analytics() {
   const [range, setRange] = useState({ start: addDays(today, -29), end: today })
   // Tracks whether the range moved since the AI summary was last written.
   const [summaryStale, setSummaryStale] = useState(false)
+  // Scopes the funnel and product exposure to one social platform.
+  const [funnelPlatform, setFunnelPlatform] = useState('all')
 
   const days = daysBetween(range.start, range.end)
   const rangeLabel = formatRange(range)
+
+  const funnel = useMemo(() => funnelForPeriod(funnelPlatform, days), [funnelPlatform, days])
+  const funnelTotals = useMemo(() => funnelSummary(funnelPlatform, days), [funnelPlatform, days])
+  const exposure = useMemo(
+    () => buildExposureData(exposureForPeriod(funnelPlatform, days)),
+    [funnelPlatform, days],
+  )
+  const platformLabel =
+    FUNNEL_PLATFORMS.find((p) => p.id === funnelPlatform)?.label || 'All platforms'
 
   function changeRange(next) {
     setRange(next)
@@ -302,11 +338,35 @@ export default function Analytics() {
         onRegenerated={() => setSummaryStale(false)}
       />
 
+      {/* One filter scopes both cards below it */}
+      <div className="fnl-filter">
+        <span className="fnl-filter-label">
+          <FaFilter style={{ fontSize: 10 }} /> Conversion &amp; exposure — by platform
+        </span>
+        <div className="subtab-row" style={{ margin: 0 }}>
+          {FUNNEL_PLATFORMS.map((p) => (
+            <button
+              key={p.id}
+              className={'subtab' + (funnelPlatform === p.id ? ' active' : '')}
+              onClick={() => setFunnelPlatform(p.id)}
+              aria-pressed={funnelPlatform === p.id}
+            >
+              <span aria-hidden="true">{p.emoji}</span> {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="g2" style={{ marginBottom: 14 }}>
         <div className="chart-card">
-          <div className="ct-title">Conversion Funnel</div>
+          <div className="dash-title">
+            <span>Conversion Funnel</span>
+            <span className="dash-title-sub">
+              {platformLabel} · {funnelTotals.purchases} purchases · {funnelTotals.endToEnd} end to end
+            </span>
+          </div>
           <div className="funnel" style={{ marginTop: 8 }}>
-            {FUNNEL.map((f, i) => (
+            {funnel.map((f, i) => (
               <div className="fss" key={i}>
                 <div className="fll">{f.l}</div>
                 <div className="fbw">
@@ -318,8 +378,11 @@ export default function Analytics() {
           </div>
         </div>
         <div className="chart-card">
-          <div className="ct-title">Exposure by Product</div>
-          <Bar data={expData} options={expOpts} height={120} />
+          <div className="dash-title">
+            <span>Exposure by Product</span>
+            <span className="dash-title-sub">{platformLabel}</span>
+          </div>
+          <Bar data={exposure} options={expOpts} height={120} />
         </div>
       </div>
     </div>

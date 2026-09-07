@@ -13,6 +13,7 @@ import { STRATEGIES } from './strategyData'
 import DemographicAnalysis from './pages/DemographicAnalysis'
 import StrategistAI from './pages/StrategistAI'
 import Products from './pages/Products'
+import CustomerList from './pages/CustomerList'
 import Profile from './pages/Profile'
 
 export default function App() {
@@ -105,6 +106,9 @@ export default function App() {
             onOpenCampaign={openCampaign}
             onOpenCampaigns={goToCampaigns}
           />
+        )}
+        {page === 'customers' && (
+          <CustomerList onOpenCampaign={openCampaign} onOpenCampaigns={goToCampaigns} />
         )}
         {page === 'analytics' && <Analytics />}
         {page === 'demographics' && <DemographicAnalysis />}

@@ -1,6 +1,6 @@
 import {
   FaHouse, FaRocket, FaChartLine, FaBox, FaWandMagicSparkles, FaUsersViewfinder,
-  FaGear, FaChessKnight,
+  FaGear, FaChessKnight, FaAddressBook,
 } from 'react-icons/fa6'
 import { useProfile } from '../settingsStore'
 
@@ -9,6 +9,7 @@ const NAV = {
   Marketing: [
     { id: 'strategy', label: 'Strategy', icon: FaChessKnight },
     { id: 'campaigns', label: 'Campaigns', icon: FaRocket, badge: '3' },
+    { id: 'customers', label: 'Customer List', icon: FaAddressBook },
     { id: 'analytics', label: 'Analytics', icon: FaChartLine },
     { id: 'demographics', label: 'Demographic Analysis', icon: FaUsersViewfinder },
     { id: 'products', label: 'Products', icon: FaBox },

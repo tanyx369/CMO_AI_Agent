@@ -190,3 +190,132 @@ export function buildAiSummary({ days, variant = 0, rangeLabel = '' }) {
     },
   }
 }
+
+/* ---------------------------------------------------------------- */
+/* Conversion funnel & product exposure, by platform                 */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Per-platform funnel rates.
+ *
+ * Only the daily impression volume and the four step-conversion rates are
+ * stored — every figure shown in the funnel is derived from these, so a
+ * platform's numbers stay internally consistent and "All platforms" is a true
+ * sum rather than a separately maintained set of totals.
+ *
+ * `productSplit` is that platform's share of impressions per product, in the
+ * order [Smart Watch, Earbuds Pro, Tracker Lite].
+ */
+const FUNNEL_RATES = {
+  instagram: {
+    impressionsPerDay: 46000, ctr: 0.082,
+    cartRate: 0.124, checkoutRate: 0.62, purchaseRate: 0.68,
+    productSplit: [0.52, 0.33, 0.15],
+  },
+  tiktok: {
+    impressionsPerDay: 58000, ctr: 0.061,
+    cartRate: 0.081, checkoutRate: 0.51, purchaseRate: 0.58,
+    productSplit: [0.44, 0.41, 0.15],
+  },
+  youtube: {
+    impressionsPerDay: 20000, ctr: 0.094,
+    cartRate: 0.132, checkoutRate: 0.66, purchaseRate: 0.71,
+    productSplit: [0.61, 0.26, 0.13],
+  },
+  linkedin: {
+    impressionsPerDay: 5500, ctr: 0.078,
+    cartRate: 0.096, checkoutRate: 0.58, purchaseRate: 0.64,
+    productSplit: [0.70, 0.18, 0.12],
+  },
+  twitter: {
+    impressionsPerDay: 7200, ctr: 0.046,
+    cartRate: 0.058, checkoutRate: 0.44, purchaseRate: 0.49,
+    productSplit: [0.55, 0.30, 0.15],
+  },
+}
+
+/** Filter options — "All platforms" plus every profile the page already tracks. */
+export const FUNNEL_PLATFORMS = [
+  { id: 'all', label: 'All platforms', emoji: '◎' },
+  ...SOCIAL_PROFILES
+    .filter((p) => FUNNEL_RATES[p.id])
+    .map((p) => ({ id: p.id, label: p.name, emoji: p.emoji })),
+]
+
+export const EXPOSURE_PRODUCTS = ['Smart Watch', 'Earbuds Pro', 'Tracker Lite']
+
+/** Absolute stage counts for one platform (or every platform summed). */
+function funnelCounts(platformId, days) {
+  const ids = platformId === 'all' ? Object.keys(FUNNEL_RATES) : [platformId]
+  return ids.reduce(
+    (acc, id) => {
+      const r = FUNNEL_RATES[id]
+      if (!r) return acc
+      const impressions = r.impressionsPerDay * days
+      const clicks = impressions * r.ctr
+      const carts = clicks * r.cartRate
+      const checkouts = carts * r.checkoutRate
+      const purchases = checkouts * r.purchaseRate
+      return {
+        impressions: acc.impressions + impressions,
+        clicks: acc.clicks + clicks,
+        carts: acc.carts + carts,
+        checkouts: acc.checkouts + checkouts,
+        purchases: acc.purchases + purchases,
+      }
+    },
+    { impressions: 0, clicks: 0, carts: 0, checkouts: 0, purchases: 0 },
+  )
+}
+
+/**
+ * The five funnel stages, ready to render.
+ *
+ * Bar widths keep the fixed funnel ramp so the shape stays readable — clicks
+ * are ~7% of impressions and a strictly proportional bar would be invisible.
+ * The values and step rates are real.
+ */
+export function funnelForPeriod(platformId, days) {
+  const c = funnelCounts(platformId, days)
+  const pct = (a, b) => (b ? ((a / b) * 100).toFixed(1) + '%' : '—')
+
+  return [
+    { l: 'Impressions', v: compact(c.impressions), w: 100, bg: 'var(--accent)', color: 'white', note: '' },
+    { l: 'Clicks', v: compact(c.clicks), w: 72, bg: 'rgba(109,94,245,0.7)', color: 'white', note: pct(c.clicks, c.impressions) + ' CTR' },
+    { l: 'Add to Cart', v: compact(c.carts), w: 44, bg: 'rgba(232,91,170,0.65)', color: 'white', note: pct(c.carts, c.clicks) },
+    { l: 'Checkout', v: compact(c.checkouts), w: 28, bg: 'rgba(232,148,12,0.8)', color: '#3a2600', note: pct(c.checkouts, c.carts) },
+    { l: 'Purchase', v: compact(c.purchases), w: 18, bg: 'var(--green)', color: 'white', note: pct(c.purchases, c.checkouts) },
+  ]
+}
+
+/** Headline conversion rate, shown next to the funnel title. */
+export function funnelSummary(platformId, days) {
+  const c = funnelCounts(platformId, days)
+  return {
+    purchases: compact(c.purchases),
+    endToEnd: c.impressions ? ((c.purchases / c.impressions) * 100).toFixed(2) + '%' : '—',
+  }
+}
+
+/** Impressions and clicks per product, for the grouped bar chart. */
+export function exposureForPeriod(platformId, days) {
+  const ids = platformId === 'all' ? Object.keys(FUNNEL_RATES) : [platformId]
+  const impressions = [0, 0, 0]
+  const clicks = [0, 0, 0]
+
+  ids.forEach((id) => {
+    const r = FUNNEL_RATES[id]
+    if (!r) return
+    const total = r.impressionsPerDay * days
+    r.productSplit.forEach((share, i) => {
+      impressions[i] += total * share
+      clicks[i] += total * share * r.ctr
+    })
+  })
+
+  return {
+    labels: EXPOSURE_PRODUCTS,
+    impressions: impressions.map((n) => Math.round(n)),
+    clicks: clicks.map((n) => Math.round(n)),
+  }
+}
